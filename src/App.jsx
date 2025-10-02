@@ -1,131 +1,20 @@
-import React, { useState, useRef } from 'react';
-import { Upload, Trash2, Loader2, ImagePlus, X, Download } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Upload, Trash2, Loader2, ImagePlus, X, Download, Settings } from 'lucide-react';
 import Papa from 'papaparse';
 import { fal } from '@fal-ai/client';
+import ApiKeySettings, { API_KEY_STORAGE_KEY } from './components/ApiKeySettings';
+import { AVAILABLE_MODELS, IMAGE_SIZES } from './config/models';
 
-// Configure FAL client with your API key
-const FAL_KEY = import.meta.env.VITE_FAL_KEY;
-
-if (!FAL_KEY) {
-  console.error('FAL_KEY not found in environment variables');
-}
-
-fal.config({
-  credentials: FAL_KEY
-});
-
-// Available FAL.ai models
-const AVAILABLE_MODELS = [
-  {
-    id: 'fal-ai/flux-pro/v1.1-ultra',
-    name: 'FLUX Pro 1.1 Ultra',
-    description: 'Latest FLUX with 2K resolution and improved photo realism'
-  },
-  {
-    id: 'fal-ai/recraft-v3',
-    name: 'Recraft V3',
-    description: 'SOTA model for vector art, brand styles, and long texts'
-  },
-  {
-    id: 'fal-ai/aura-flow',
-    name: 'AuraFlow v0.3',
-    description: 'State-of-the-art flow-based generation (Beta)'
-  },
-  {
-    id: 'fal-ai/flux-pro/v1.1',
-    name: 'FLUX Pro 1.1',
-    description: 'Enhanced image generation with superior composition'
-  },
-  {
-    id: 'fal-ai/flux-pro/new',
-    name: 'FLUX Pro New',
-    description: 'Accelerated version with faster generation'
-  },
-  {
-    id: 'fal-ai/flux/schnell',
-    name: 'FLUX Schnell',
-    description: '1-4 step generation optimized for speed'
-  },
-  {
-    id: 'fal-ai/flux-realism',
-    name: 'FLUX Realism',
-    description: 'Specialized for hyper-realistic images'
-  },
-  {
-    id: 'fal-ai/stable-diffusion-v35-large',
-    name: 'SD 3.5 Large',
-    description: 'Large MMDiT model with improved quality'
-  },
-  {
-    id: 'fal-ai/pixart-sigma',
-    name: 'PixArt Sigma',
-    description: '4K text-to-image generation'
-  },
-  {
-    id: 'fal-ai/realistic-vision',
-    name: 'Realistic Vision',
-    description: 'Focused on realistic image generation'
-  },
-  {
-    id: 'fal-ai/fast-sdxl',
-    name: 'Fast SDXL',
-    description: 'High-speed SDXL generation'
-  },
-  {
-    id: 'fal-ai/omnigen-v1',
-    name: 'OmniGen',
-    description: 'Multi-modal generation with editing capabilities'
-  },
-  {
-    id: 'fal-ai/fooocus',
-    name: 'Fooocus',
-    description: 'Optimized parameters for quality improvements'
-  },
-  {
-    id: 'fal-ai/kolors',
-    name: 'Kolors',
-    description: 'Photorealistic image generation'
-  },
-  {
-    id: 'fal-ai/stable-cascade',
-    name: 'Stable Cascade',
-    description: 'Efficient latent space generation'
+// Function to configure FAL client with API key
+const configureFalClient = (apiKey) => {
+  if (apiKey) {
+    fal.config({
+      credentials: apiKey
+    });
+    return true;
   }
-];
-
-// Add this near your AVAILABLE_MODELS constant
-const IMAGE_SIZES = [
-  {
-    id: 'square_hd',
-    name: 'Square HD',
-    description: '1024x1024'
-  },
-  {
-    id: 'square',
-    name: 'Square',
-    description: '512x512'
-  },
-  {
-    id: 'portrait_4_3',
-    name: 'Portrait 4:3',
-    description: '768x1024'
-  },
-  {
-    id: 'portrait_16_9',
-    name: 'Portrait 16:9',
-    description: '1080x1920'
-  },
-  {
-    id: 'landscape_4_3',
-    name: 'Landscape 4:3',
-    description: '1024x768'
-  },
-  {
-    id: 'landscape_16_9',
-    name: 'Landscape 16:9',
-    description: '1920x1080'
-  }
-];
+  return false;
+};
 
 const ImageGenerator = () => {
   const [inputMethod, setInputMethod] = useState('manual');
@@ -138,7 +27,32 @@ const ImageGenerator = () => {
   const [generatedImages, setGeneratedImages] = useState([null]);
   const [generatingStates, setGeneratingStates] = useState([false]);
   const [progress, setProgress] = useState({});
+  const [apiKey, setApiKey] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showApiKeyBanner, setShowApiKeyBanner] = useState(false);
   const fileInputRef = useRef(null);
+
+  // Load API key on mount and configure FAL client
+  useEffect(() => {
+    const storedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
+    if (storedKey) {
+      setApiKey(storedKey);
+      configureFalClient(storedKey);
+    } else {
+      setShowApiKeyBanner(true);
+    }
+  }, []);
+
+  // Handle API key changes
+  const handleApiKeyChange = (newKey) => {
+    setApiKey(newKey);
+    if (newKey) {
+      configureFalClient(newKey);
+      setShowApiKeyBanner(false);
+    } else {
+      setShowApiKeyBanner(true);
+    }
+  };
 
   
   // Update handleNumPromptsChange
@@ -243,6 +157,16 @@ const downloadImage = async (url, promptText) => {
 
  // Update handleGenerateSingle
  const handleGenerateSingle = async (promptIndex) => {
+  // Check if API key exists
+  if (!apiKey) {
+    setProgress(prev => ({
+      ...prev,
+      [promptIndex]: { status: 'error', message: 'Please add your API key first' }
+    }));
+    setShowApiKeyBanner(true);
+    return;
+  }
+
   const newGeneratingStates = [...generatingStates];
   newGeneratingStates[promptIndex] = true;
   setGeneratingStates(newGeneratingStates);
@@ -271,8 +195,8 @@ const downloadImage = async (url, promptText) => {
         if (update.status === 'IN_PROGRESS') {
           setProgress(prev => ({
             ...prev,
-            [promptIndex]: { 
-              status: 'generating', 
+            [promptIndex]: {
+              status: 'generating',
               message: update.logs[update.logs.length - 1]?.message || 'Generating...'
             }
           }));
@@ -297,10 +221,21 @@ const downloadImage = async (url, promptText) => {
     }));
   } catch (error) {
     console.error('Error generating image:', error);
-    setProgress(prev => ({
-      ...prev,
-      [promptIndex]: { status: 'error', message: 'Error generating image' }
-    }));
+    
+    // Check if it's an authentication error
+    const errorMessage = error.message || '';
+    if (errorMessage.includes('401') || errorMessage.includes('auth') || errorMessage.includes('credential')) {
+      setProgress(prev => ({
+        ...prev,
+        [promptIndex]: { status: 'error', message: 'Invalid API key. Please check your settings.' }
+      }));
+      setShowApiKeyBanner(true);
+    } else {
+      setProgress(prev => ({
+        ...prev,
+        [promptIndex]: { status: 'error', message: `Error: ${errorMessage.substring(0, 50)}...` }
+      }));
+    }
   } finally {
     setGeneratingStates(prev => {
       const newStates = [...prev];
@@ -340,10 +275,47 @@ const downloadImage = async (url, promptText) => {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white">
       <div className="container mx-auto p-6">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
-            AI image generator comparison
-          </h1>
-          <p className="text-gray-400 mb-6">Create stunning AI-generated images from your prompts</p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-4xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
+                AI image generator comparison
+              </h1>
+              <p className="text-gray-400">Create stunning AI-generated images from your prompts</p>
+            </div>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded bg-gray-700 hover:bg-gray-600 transition-colors"
+            >
+              <Settings size={20} />
+              API Settings
+            </button>
+          </div>
+
+          {/* API Key Banner */}
+          {showApiKeyBanner && (
+            <div className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-start gap-3">
+              <div className="flex-1">
+                <h3 className="text-yellow-400 font-semibold mb-1">API Key Required</h3>
+                <p className="text-sm text-gray-300">
+                  To generate images, you need to provide your own FAL.AI API key.
+                  Your key is stored locally and only used to authenticate with FAL.AI.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowSettings(true)}
+                className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-gray-900 rounded font-medium transition-colors whitespace-nowrap"
+              >
+                Add API Key
+              </button>
+            </div>
+          )}
+
+          {/* API Key Settings Modal */}
+          <ApiKeySettings
+            isOpen={showSettings}
+            onClose={() => setShowSettings(false)}
+            onApiKeyChange={handleApiKeyChange}
+          />
           
           {/* Input Method and Global Model Selection */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 bg-gray-800 p-6 rounded-lg shadow-xl">
